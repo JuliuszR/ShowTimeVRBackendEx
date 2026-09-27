@@ -223,5 +223,23 @@ src/
 ```bash
 npm run test        # unit tests
 npm run test:cov    # coverage
-npm run test:e2e    # e2e tests
+npm run test:e2e    # e2e / black-box tests
 ```
+
+Both scripts already carry the Node flags this stack needs to actually run (NestJS 12's packages are ESM-only, and Node 25's new global `localStorage` needs an explicit opt-out) — no extra setup required.
+
+### Unit tests
+
+Colocated `*.spec.ts` files per module, with `DatabaseService`/`DeviceService` mocked out:
+
+- `src/device/device.service.spec.ts` — device lookup, 404 on unknown id, id deduplication.
+- `src/group/group.service.spec.ts` — group creation vs. reuse-by-name, idempotent add, group deletion once emptied, deduplicated file aggregation, all the 404 paths.
+- `src/group/group.controller.spec.ts` — controllers correctly delegate to `GroupService`.
+
+### E2E / black-box tests
+
+`test/groups.e2e-spec.ts` boots the real `AppModule` (with the same global `ValidationPipe` as production) and drives it purely over HTTP with `supertest` — no service is mocked, and each test resets the database to the seed fixture first so ordering never matters. It covers, per endpoint:
+
+- **`POST /groups/devices`** — create-on-first-use, reuse-by-name (no duplicates), targeting by `groupId`, idempotent re-add, 404 on unknown device/group, 400 on both/neither identifier, 400 on unknown fields (whitelist), 400 on a non-integer `deviceId`, and 400 for `groupName` values containing disallowed characters (path traversal, brackets, `<script>` tags — the injection-style cases the validation is meant to block).
+- **`DELETE /groups/devices`** — removal keeps the group alive while other devices remain, deletes it once empty, and confirms the deleted group is genuinely gone (a later reference to it 404s); 404 for an unknown group.
+- **`POST /groups/files`** — deduplicated file listing across a single group and across multiple groups mixing `groupId`/`groupName`, 404 for an unknown group, 400 for an empty `groups` array, and 400 for a nested group entry with both identifiers or an unknown field.
