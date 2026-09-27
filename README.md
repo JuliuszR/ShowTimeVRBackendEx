@@ -74,6 +74,8 @@ Creates the group if a `groupName` is given and no group with that name exists y
 }
 ```
 
+![Add device 1 to a new group "star-wars-fans"](docs/screenshots/add-device-1-alpha.png)
+
 Adding another device to the same group by name reuses it instead of creating a duplicate:
 
 **Request**
@@ -89,6 +91,8 @@ Adding another device to the same group by name reuses it instead of creating a 
   "devices": [1, 2]
 }
 ```
+
+![Add device 2 to the same group by name — reused, not duplicated](docs/screenshots/add-device-2-reuse.png)
 
 A group can also be targeted by `groupId` instead of `groupName`:
 
@@ -106,6 +110,8 @@ A group can also be targeted by `groupId` instead of `groupName`:
 }
 ```
 
+![Add device 3 to the group by groupId](docs/screenshots/add-device-by-group-id.png)
+
 **Error — unknown device (`404 Not Found`)**
 
 Request:
@@ -121,6 +127,8 @@ Response:
   "statusCode": 404
 }
 ```
+
+![Adding an unknown device returns 404](docs/screenshots/add-device-unknown-404.png)
 
 Other validation errors (`400 Bad Request`):
 - Both `groupId` and `groupName` supplied.
@@ -146,6 +154,8 @@ Removes the device from the group and returns the resulting group. If the group 
 }
 ```
 
+![Remove device 1 — other devices remain in the group](docs/screenshots/remove-device-1.png)
+
 Removing the last device deletes the group:
 
 **Request**
@@ -161,6 +171,8 @@ Removing the last device deletes the group:
   "devices": []
 }
 ```
+
+![Remove the last device — the group is emptied and deleted](docs/screenshots/remove-device-3-empties-group.png)
 
 **Error — unknown group (`404 Not Found`)**
 ```json
@@ -182,6 +194,8 @@ Accepts a list of group identifiers (mixing `groupId`/`groupName` across entries
 ```json
 ["notavirus.exe", "deathstarblueprint.pdf"]
 ```
+
+![List deduplicated files for a group](docs/screenshots/list-files-for-group.png)
 
 Multiple groups (files deduplicated across all their devices):
 ```json
