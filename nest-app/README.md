@@ -1,114 +1,213 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# ShowTimeVR Backend — Device/Group Service
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A mock HTTP service for managing devices and groups, built with NestJS, TypeScript (`strict`), and [node-json-db](https://github.com/Belphemur/node-json-db) as the storage layer.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Setup
 
 ```bash
-$ npm install
+npm install
 ```
 
-## Compile and run the project
+## Running the app
 
 ```bash
 # development
-$ npm run start
+npm run start
 
 # watch mode
-$ npm run start:dev
+npm run start:dev
 
 # production mode
-$ npm run start:prod
+npm run start:prod
 ```
 
-## Run tests
+The server listens on `http://localhost:3000` by default (override with the `PORT` env var).
+
+On first boot the database file (`db.json`, git-ignored) is created and seeded automatically with 3 devices and no groups:
+
+```json
+{
+  "devices": [
+    { "id": 1, "files": ["notavirus.exe", "deathstarblueprint.pdf"] },
+    { "id": 2, "files": ["deathstarblueprint.pdf", "peterdinklagenudes.zip"] },
+    { "id": 3, "files": ["peterdinklagenudes.zip", "keyboardcat.mp4"] }
+  ],
+  "groups": []
+}
+```
+
+## Model
+
+**Device**
+- `id: number`
+- `files: string[]`
+
+**Group**
+- `id: number`
+- `name: string`
+- `devices: number[]` — device ids
+
+## API
+
+All endpoints accept and return `application/json`. Request bodies are validated (`class-validator`); unknown fields are rejected (`400 Bad Request`).
+
+A group is always identified by **either** `groupId` **or** `groupName` — never both, never neither.
+
+### `POST /groups/devices` — add a device to a group
+
+Creates the group if a `groupName` is given and no group with that name exists yet. Adding a device that's already in the group is a no-op. Returns the resulting group.
+
+**Request**
+```json
+{
+  "deviceId": 1,
+  "groupName": "star-wars-fans"
+}
+```
+
+**Response `200 OK`**
+```json
+{
+  "id": 1,
+  "name": "star-wars-fans",
+  "devices": [1]
+}
+```
+
+Adding another device to the same group by name reuses it instead of creating a duplicate:
+
+**Request**
+```json
+{ "deviceId": 2, "groupName": "star-wars-fans" }
+```
+
+**Response `200 OK`**
+```json
+{
+  "id": 1,
+  "name": "star-wars-fans",
+  "devices": [1, 2]
+}
+```
+
+A group can also be targeted by `groupId` instead of `groupName`:
+
+**Request**
+```json
+{ "deviceId": 3, "groupId": 1 }
+```
+
+**Response `200 OK`**
+```json
+{
+  "id": 1,
+  "name": "star-wars-fans",
+  "devices": [1, 2, 3]
+}
+```
+
+**Error — unknown device (`404 Not Found`)**
+
+Request:
+```json
+{ "deviceId": 999, "groupName": "ghost-group" }
+```
+
+Response:
+```json
+{
+  "message": "Device with id 999 not found",
+  "error": "Not Found",
+  "statusCode": 404
+}
+```
+
+Other validation errors (`400 Bad Request`):
+- Both `groupId` and `groupName` supplied.
+- Neither `groupId` nor `groupName` supplied.
+- Unknown fields in the body (e.g. `"extra": "nope"`).
+- `groupId`/`groupName` referencing a group id that doesn't exist.
+
+### `DELETE /groups/devices` — remove a device from a group
+
+Removes the device from the group and returns the resulting group. If the group has no devices left, it is deleted from the database — the response still reflects its final (empty) state.
+
+**Request**
+```json
+{ "deviceId": 1, "groupName": "star-wars-fans" }
+```
+
+**Response `200 OK`** (other devices remain)
+```json
+{
+  "id": 1,
+  "name": "star-wars-fans",
+  "devices": [2, 3]
+}
+```
+
+Removing the last device deletes the group:
+
+**Request**
+```json
+{ "deviceId": 3, "groupId": 1 }
+```
+
+**Response `200 OK`**
+```json
+{
+  "id": 1,
+  "name": "star-wars-fans",
+  "devices": []
+}
+```
+
+**Error — unknown group (`404 Not Found`)**
+```json
+{ "deviceId": 1, "groupName": "nonexistent" }
+```
+
+### `POST /groups/files` — list files for devices in given groups
+
+Accepts a list of group identifiers (mixing `groupId`/`groupName` across entries is fine) and returns the deduplicated list of files across every device in those groups.
+
+**Request**
+```json
+{
+  "groups": [{ "groupName": "star-wars-fans" }]
+}
+```
+
+**Response `200 OK`**
+```json
+["notavirus.exe", "deathstarblueprint.pdf"]
+```
+
+Multiple groups (files deduplicated across all their devices):
+```json
+{
+  "groups": [{ "groupId": 1 }, { "groupName": "another-group" }]
+}
+```
+
+**Error — unknown group (`404 Not Found`)**
+```json
+{ "groups": [{ "groupName": "nonexistent" }] }
+```
+
+## Project structure
+
+```
+src/
+  database/     # node-json-db wrapper (DatabaseService), collection enum, seed data
+  device/       # Device model + DeviceService (read-only data access)
+  group/        # Group model, DTOs, GroupService (business logic), GroupController (HTTP)
+```
+
+## Tests
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run test        # unit tests
+npm run test:cov    # coverage
+npm run test:e2e    # e2e tests
 ```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).

@@ -3,6 +3,9 @@
 /node_modules
 /build
 
+# runtime mock database (seeded automatically on boot)
+/db.json
+
 # TypeScript build cache
 *.tsbuildinfo
 
