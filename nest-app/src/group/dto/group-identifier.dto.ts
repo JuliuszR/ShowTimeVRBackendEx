@@ -16,7 +16,6 @@ export class GroupIdentifierDto {
   @IsOptional()
   @IsInt()
   @Min(1)
-  @ExactlyOneGroupIdentifier()
   groupId?: number;
 
   @IsOptional()
@@ -26,4 +25,13 @@ export class GroupIdentifierDto {
     message: 'groupName may only contain letters, numbers, spaces, underscores and hyphens',
   })
   groupName?: string;
+
+  /**
+   * `@IsOptional()` on groupId/groupName above skips ALL validators on that
+   * same property when its value is undefined — including a cross-field
+   * check placed there. So "neither provided" needs its own property,
+   * never itself marked `@IsOptional`, to actually run.
+   */
+  @ExactlyOneGroupIdentifier()
+  private readonly _groupIdentifierGuard?: never;
 }
